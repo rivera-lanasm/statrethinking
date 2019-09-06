@@ -1,0 +1,762 @@
+---
+title: "Statistical Rethinking Lectures"
+output: html_notebook
+---
+
+
+
+Chapter 2: Small worlds and large worlds 
+
+small world; 
+self contained logical world of the model 
+large world;
+broader context in which one deploys the model 
+
+Bayesian models; ideal for the small world 
+building up bayesian inference 
+
+counting and comparing possibilities 
+in ofder to make good inference about what actually happened
+helps to consider everything that could have happened 
+garden of forking data 
+some paths are pruned, those that are not consistent with our knowledge 
+provides a quantitative ranking of hypotheses 
+gurantees best possible anser on small world terms 
+
+toy example
+four balls in bag, either blue or white 
+5 possibilities of distribution of whites and blues 
+these possibilities are the CONJECTURES 
+
+goal is to figure out which of these conjectures is most plausible given some evidence about the contents of the bag 
+evidence --> a sequence of three balls drawn (with replacement)
+blue, white, blue --> the data 
+
+model to be consistent with the prior knowledge and the evidence 
+
+inferential power comes from comparing this count of possible paths given a conjecture (3 of 64 paths) to the number of feasible paths, in that they reproduce evidence, from each of the other conjectures
+
+comparing countes from each conjecture, we have a part of solution for a way to rate the relative plausibility of each conjecture 
+
+also have to consider the likelihood of each conjecture being realized. can assume uniform distibution, but could have prior for this 
+
+with each additional observation, simply multiply the count of 
+feasible paths given each conjecture by the number of ways to produce the result of the new observation 
+
+updating approach; 
+--> when we have previous infor suggesting there are x ways for a conjecture to produce previous evidence, X
+--> you can acquire new observation, Y, that the same conjecture can produce in y ways, 
+--> the number of ways the conjecture can account for both X and Y is x*y
+
+recall; 
+pluasibiliity of conjecture X given Y 
+proportional to ways X can produce Y x prior plausibility of X
+
+a PARAMETER; way of indexing possible explanations of the data 
+LIKELIHOOD; relative number of ways a value p can produce the data 
+PRIOR PROBABILITY 
+the updated value of p, the POSTERIOR PROBABILITY 
+
+##### ====================================
+
+design bayesian model 
+globe tossing example; what proportion of earth is water?
+observe random points on surface 
+
+===== 1) data story; motivate model by narrative how data might arise
+BDA can be descriptive or causal 
+either is complete, in sense that they are sufficient for specifying an algorithm for simulating new data 
+
+requires describing aspects of the underlying reality as well as the sampling process:
+a) the true proportion of water covering earth --> p 
+b) single simulation has probability p of producing water and 1-p of producing land 
+c) each simulation is independent of the others 
+
+recall, 
+many different stories can correspond to same model 
+successful models do not uniquely support a given data story 
+connection between 
+a) verbal hypothesis 
+b) data story 
+c) statistical model 
+
+===== 2) update; educate model with data
+BM begins with one set of plausibilities assigned to each conjecture
+these priors are updated to produce posterior plausibilities 
+
+start with uniform prior, equal plausibility for all values of p 
+as more evidence is observed, the maximum height of curve, representing PDF of p, increases. Meaning that fewer values of p amass more plausibility 
+
+
+====== 3) evaluate; 
+bayesian machine guarantees perfect inference in the small world 
+
+a) model certainty is no guarantee that model is good 
+the inferences are conditional on the model 
+using a different model, the same updating process could produce 
+very different posteriors 
+
+b) important to supervise and critique model work 
+important to check model's inferences in light of aspects of data model does not know about 
+
+##### ====================================
+Components of the model 
+
+a) number of ways each conjecture could produce an observation 
+b) accumulated number of ways each conjecture could produce entire data 
+c) initial plausibility of each conjecture 
+
+unobserved variables --> parameters; can be inferred 
+from observed variables --> evidence 
+
+every parameter requires a prior plausibility 
+priors as probability distribution 
+
+##### ====================================
+making the model go 
+
+for every unique combination of data, likelihood, parameters, and prior, there is a unique posterior distribution 
+
+posterior distributions conatins relative plausibility of different parameter values, conditional on the data and the model. 
+
+probability of the data --> average probability of the data 
+
+posterior = probabitliy of data * prior / ave prob of data 
+
+ave prob of data --> evidence --> expected value of probability of data given conjecture, an integral of prob of data given prior with respect to prior (Average of continuous distribution of values)
+
+#####=============================
+the bayesian model 
+likelihood, parametrs, prior 
+a motor for processing data that produces the posterior 
+this motor conditions the prior on the data 
+
+how you fit the model is part of the model 
+our numerical technique influences our inference 
+
+### ========== a) GRID APPROXIMATION 
+approximation of continuous paramter using a finite grid of 
+parameter values 
+scales very poorly 
+
+1) define grid of parameter values to test 
+2) compute value of the prior at each paramter value on grid 
+3) compute likelihood at each parameter value on grid 
+4) compute unstandardized posterior 
+5) standardize posterior 
+
+```{r}
+# observed values of "water"
+w = 6
+
+# total observations
+obs = 9
+
+# num points 
+n = 50
+
+# define grid 
+p_grid = seq(from = 0, to = 1, length.out = n)
+
+# compute prior: 
+# likelihood of grid value as parameter 
+prior = rep(1,n)
+# prior = ifelse(p_grid<0.5, 0, 1)
+# prior = exp(-5*abs(p_grid - 0.5))
+
+# compute the likelihood at each value in grid 
+# likelihood of data given value of p 
+likelihood = dbinom(w, size=obs, prob=p_grid)
+
+# compute product of likelihood and priod (unstd post)
+unstd.posterior = likelihood * prior 
+
+# std prior
+posterior = unstd.posterior/sum(unstd.posterior)
+
+# plot posterior 
+plot(p_grid, posterior, type="b", 
+     xlab="probability of water", 
+     ylab="posterior probability")
+mtext("n points")
+
+```
+
+1 SEARCH TRHOUGH THE GRID 
+
+### ========== b) quadratic approximation 
+under quite general conditions, the regions near the peak of tehe posterior distriubtions wil be nearly Gaussian (?)
+indicates posterior can be usefully approximated by gaussian, which can be described with just two parameters 
+
+gaussian approximation --> "quadratic"
+because the logarithm of a gaussian forms a parabola, a quadratic function 
+
+quadratic approximation represents any log posterior with a parabola 
+
+1) find the posterior mode 
+by some optimization algorithm 
+climbs the posterior distrubution 
+
+2) estimate curvature near the peak 
+curvature used to compute a quadratic approximation of the entire posterior distribution
+
+```{r}
+library(rethinking)
+
+# formula 
+formula = alist(
+W ~ dbinom( W+L ,p) , # binomial likelihood
+p ~ dunif(0,1) # uniform prior
+)
+
+# data 
+d = list(W=6,L=3)
+
+globe.qa = map(
+formula,
+data = d )
+
+# display summary of quadratic approximation
+precis( globe.qa )
+
+```
+
+precis presents a brief summary of quadratic approximation 
+posterior mean of 0 = .67
+the curvature labeled as StdDev (of posterior)
+
+"assuming the posterior is gaussian, it is maximized at .67 and its 
+standard deviation is 0.16"
+
+
+
+```{r}
+# analytical calculation 
+W = 6 
+L = 3 
+# updating alpha and beta from their value at prior, b(1,1)
+curve(dbeta(x, W+1, L+1), from=0, to=1)
+
+# quadratic approximation 
+curve(dnorm(x,0.67, 0.16), lty=2, add=TRUE)
+```
+
+quadratic approximation, with uniform prior, is often equivalent to 
+maximum likelihood estiamte (MLE), often used in non bayesian parameter estimation 
+
+in quadratic app, hessian is matrix of second derivatives of the log of posterior probability with respect to parameters 
+proportional to inverse squared standard deviation
+
+estimate of standard deviation computed from the hessian 
+
+
+### ========== c) markov chain monte carlo (mcmc)
+
+for more complex model types, mutli level or mixed effects models 
+grid search is too inefficient and the numerican solution in quadratic approximation often is not tractable 
+furter, multilevel models do not always allow for a single, unified function for the posterior distribution
+
+MCMC
+instead of truing to copute or approximate the posterior directly, MCMC merely draws samples from the posterior 
+
+frequency of posterior samples correspond to posterior plausibilities 
+work directly with samples rather than first constructing some estimate of the functional form 
+
+GLobe tossing example MCMC
+```{r}
+
+# length of the trace 
+n_samples = 1000
+
+p = rep(NA, n_samples)
+
+# set first estimate of posterior mean at .5 
+p[1] = 0.5
+
+# data
+W = 6
+L = 3
+
+# iterating through rest of trace 
+for ( i in 2:n_samples ) {
+  
+  # next value of p in trace is value drawn from normal dist 
+  # with mean equal to previous value in trace
+  # arb std dev 
+  p_new <- rnorm( 1 , p[i-1] , 0.1 )
+  
+  # standardizing value between 0 and 1 (?)
+  if ( p_new < 0 ) 
+    p_new <- abs( p_new )
+  
+  if ( p_new > 1 ) 
+    p_new <- 2 - p_new
+  
+  # likelihood given last value of p from trace
+  q0 <- dbinom( W , W+L , p[i-1] )
+  
+  # likelihood given current value of p from trace 
+  q1 <- dbinom( W , W+L , p_new )
+  
+  # current value of p:
+  # if ratio of new likelihood over old is greater than 1, current      # value of p is updated, else:
+  # it might be updated as well given draw from uniform 
+  p[i] <- ifelse( runif(1) < q1/q0 , p_new , p[i-1] )
+}
+```
+
+```{r}
+plot(p)
+```
+
+
+now the values in p are samples from the posterior distribution 
+compare to the analytical prior
+
+```{r}
+dens( p , xlim=c(0,1) )
+curve( dbeta( x , W+1 , L+1 ) , lty=2 , add=TRUE )
+
+```
+
+depends on the Metropolis (or metropolis hastings) algorithm 
+
+#### ==================
+Summary 
+the target of inference in bayesian inference is a posterior probability distribution 
+posterior probability sataes the relative number of ways each conjectured CAUSE of the data could have produced the data 
+
+a bayesian model is a composite of 1) variables and 
+2) distribution definitions for these variables 
+
+
+# =========================================
+# =========================================
+# =========================================
+
+Chapter 3: Sampling the Imaginary 
+Summarize bayesian estimates and consider large world obligations 
+working with samples from the posterior distribution
+
+rare disease example:
+test that correctly identifies disease almost always 
+
+whenever the condition is very rare, having a test that finds all true cases (or close to all) is still no guarantee that a positive result carries much information at all 
+reason is that most positive results are false positives! 
+even when all the true positives are detected correctly 
+
+recall
+bayesian inference is distinguished by a broad view of proability, not by the mere use of bayes' theorem 
+
+drawing sample from the posterior distribution 
+where the sampled events are parameter values 
+
+bayesian formalism treats arameter distributions as relative plausibility, not as any physical random process 
+recall, 
+randomness is alwyas a propoerty of information, never of the real world 
+
+an empirical attack on the posterior 
+often easier to work with samples from the posterior rather than with probabilities and integrals directly 
+
+recall, 
+signal detection problem related to rare disease example 
+
+1) some binary state hidden from us 
+2) we obesrve an imperfect cue of hidden state 
+3) use bayes' theorem to logically deduce the impact of the cue on our uncertainty 
+
+similar to inference setup 
+1) a hypothesis is either true or false 
+2) we use a statistical procedure to get an impperfect cue of hypothesis' falsity 
+3) use bayes' theorem to logicall y deduce the impact of cure on the status of the hypothsis
+
+problem of low base rates persists 
+
+#### sampling froma  grid-approximate posterior
+
+recall, 
+grid approximation of probability of water on globe 
+using grid approximation 
+
+```{r}
+# data 
+W = 6
+L = 3
+
+# grid of possible posterior values, finite 
+p_grid = seq(from=0, to=1, length.out = 1000)
+
+# prior; beta (1,1), uniform 
+prob_p = rep(1,1000)
+
+# likelihood; binomial 
+prob_data = dbinom(W, size = W+L, prob=p_grid)
+
+# posterior = likelihood scaled by prior 
+posterior = prob_data*prob_p 
+posterior = posterior/sum(posterior) 
+
+# plot posterior 
+plot(p_grid, posterior, type="b", 
+     xlab="parameter", 
+     ylab="plausibility of parameter")
+mtext("n points")
+
+
+```
+
+Now we draw 10,000 samples from this posterior (w replacement)
+
+all this does is crudely replicate the posterior density already computed via grid approximation 
+
+next, use samples to describe and understand the posterior 
+
+
+```{r}
+samples = sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+plot(samples)
+rethinking::dens(samples)
+
+```
+
+
+#### =========================================
+Sampling to summarize 
+
+summarize and interpret the posterior using samples
+
+1) intervals of defined boundaries 
+```{r}
+# add up density of posterior distribution where parameter is less
+# than .5 
+sum(posterior[p_grid < 0.5])
+```
+
+simple given there is only ONE parameter in the posterior distribution 
+perform same calculation this time using samples from the posterior 
+this approach DOES generalize to complex models with many paramters 
+
+```{r}
+# same as method using posterior itself, only scaling by size of the sample 
+
+sum(samples < 0.5) / 1e4
+
+
+```
+
+
+2) questions about intervals of defined proabbility mass 
+interval of posterior probability, a credible interval 
+
+report two parameter values that contain between them a specified amount of posterior dprobability, a prob mass 
+
+CAN BE MISLEADING
+
+```{r}
+p_grid = seq( from=0 , to=1 , length.out=1000 )
+prior = rep(1,1000)
+
+# data suggests that the value for W probability is close to 1
+likelihood = dbinom(3, size=3, prob=p_grid)
+
+posterior = likelihood * prior
+posterior = posterior/sum(posterior)
+
+samples = sample(p_grid, size=1e4, replace=TRUE, prob=posterior)
+
+# plot posterior 
+rethinking::dens(samples)
+
+plot(p_grid, posterior, type="b", 
+     xlab="parameter", 
+     ylab="plausibility of parameter")
+mtext("n points")
+
+```
+
+```{r}
+PI(samples, prob=0.5)
+```
+
+the above is the center 50% of the probability density 
+but excldes the most probable parameter value, near p = 1
+
+so in terms of describing the shape of the posterior distribution, the percentile interval can be MISLEADING 
+
+HIGHEST POSTERIOR DENSITY INTERVAL (HPDI)
+the narrowest interval containing the specified probability mass 
+
+```{r}
+rethinking::HPDI(samples, prob=0.5)
+```
+
+narrowest interval containing the specified proportion of probability mass --> densest 
+interval that best represents the parameter values most consistent with the data
+HPDI always contains the most probable parameter values
+
+difference between percentile and HPDI confidence intervals 
+when the posterior is bell shaped, it does not matter much which type of interval is used 
+
+HPDI more computationally intensive 
+suffers from greater sumulation variance 
+
+recall,
+the entire posterior distribution is the Bayesian estimate 
+
+overconfidence of confidence interval 
+95% is a small world number in no sense does a 95% interval contain the "true" value 95% of the time 
+
+
+##### ============= 3) questions about point estimates 
+
+final common summary task for the posterior s to produce point estimates of some kind
+
+given the entire posterior distribution, which value should you report?
+AVOID THIS 
+you don't have to choose, hardly ever necessary and often harmful 
+
+but if you must 
+
+a) MAXIMUM A POSTERIORI (MAP)
+point with the highest posterior probability 
+
+```{r}
+
+# MAP
+p_grid[which.max(posterior)]
+
+# or if you have samlples from the posterior, you can still 
+# approximate the MAP 
+
+rethinking::chainmode(samples, adj=0.01)
+
+# median or mode are actually NOT as accurate 
+mean(samples)
+median(samples)
+
+```
+
+Choosing between the MAP, median, and mean 
+
+Going beyond using the entire posterior as the estmate is to choose a LOSS FUNCTION 
+a rule that tells the cost associated with using any particular point estimate 
+different loss functions imply different point estimates 
+
+given a posterior distribution, 
+median minimizes loss function associated with arriving at best guess of p 
+
+```{r}
+# Assuming true value of p is 0.5 
+# and loss function is absolute distance from 0.5 
+
+# weighted average loss 
+sum(posterior*abs(0.5-p_grid))
+
+# weighted loss for each value in p_grid 
+loss = sapply(p_grid, function(d) sum(posterior*abs(d-p_grid)))
+
+# value from p grid that minimized loss function 
+p_grid[which.min(loss)]
+
+# happens to be closest to median of posterior distrinution 
+```
+
+in order to decide upon a point estimate, a sing value summary of the entire posterior distribution, it is necessary to pick a loss function 
+absolute loss function
+leads to the mdian as point estimate 
+
+quadratic loss 
+leads to the posterior mean as point estimate 
+
+assymmetric loss functions may demand new loss functins 
+
+#### ===========================
+#### =========== 3.3. SAmpling to simulate prediction 
+
+simulation 
+
+1) MODEL DESIGN 
+sample from both posterior and the prior 
+
+sampling from prior, seeing what the model expects before seeing the data 
+
+DUMMY DATA 
+
+the target of our inference, the true value of p 
+bayesian models are always generative, capable of simulating predictions 
+
+
+```{r}
+dummy_w = rbinom(1e5, size=10, prob = 0.7)
+simplehist(dummy_w, xlab="dummy water count")
+
+```
+
+2) MODEL CHECKING
+after model is updated with data, worth simulating implied observations to check the fit and investigate model behavior 
+
+a) ensuring the model fitting worked correctly 
+
+b) evaluating the adquacy of the model for some purpose 
+
+recall, bayesian models are geneartive; able to simulate observations as well as estimate parameters from observations once model is conditioned on data 
+
+
+3) software validation 
+check dummy examples
+retrodiction
+
+4) research design 
+power analysis 
+broader possibilities. generally evaluate if research design is effective using model derived from it 
+
+looking for aspects of the data not well described by model's expectations
+
+typically, we hope to either 
+a) predict future observations 
+b) to understand enough that one might usefully tinker with the world (involves understanding causaility and intervention)
+
+model checks using sumulated observations 
+implied predictions of the model are uncertain in two ways 
+
+a) observation uncertainty 
+for any unique value of the parameter p, there is a unique implied pattern of observations the model expects 
+
+b) uncertainty about p 
+interacts with sampling variance 
+
+would like to PROPOGATE parameter uncertainty, carry it forward 
+
+averaging over the posterior density for p while coputing the predictions 
+for each possible value of p, there is an implied distribution of outcomes 
+if you were to compute the sampling distributions of outcomes at EACH value of p, you could average ALL OF THESE PREDICTION DISTRIBUTIONS toegether using the posterior probabilities of each value of p to get the POSTERIOR PREDICTIVE DISTRIBUTION  (PPD)
+
+this PPD propagates uncertainty about parameters to uncertainty about prediction 
+the resulting distributin is for PREDICTIONS 
+ths method, as opposed to samplng from the MAP, for example, does NOT THROW AWAY UNCERTAINTY ABOUT THE PARAMETERS 
+
+```{r}
+w = rbinom(1e4, size=9, prob=0.6)
+rethinking::simplehist(w)
+
+# now using the samples of plausible parameters weighted by posterior probabilities 
+w = rbinom(1e4, size=9, prob=samples)
+rethinking::simplehist(w)
+
+# SIMULATED MODEL PREDICTIONS QUITE CONSISTENT 
+# more spread, however this reflects
+
+
+```
+
+HOWEVER, CONSIDER TWO OTHER WAYS OF VIEWING THE OBSERVED DATA 
+
+a) longest run of water or land 
+simulated predictions consistent 
+
+b) number of switches between water and land or vice versa 
+much less consistent 
+
+5) forecasting
+simulate new predictions  for new cases and future observations 
+
+extreme likelihood and tail area probability 
+model checking is inherently subjective 
+
+# =========================================
+# =========================================
+# =========================================
+
+# Homework 
+
+```{r}
+# globe tossing with grid approximation 
+
+n = 1000
+
+p_grid = seq(0,1,length.out  = n)
+
+
+prior = rep(1,n)
+
+# data --> the observations 
+W = 8 
+L = 7 
+
+likelihood = dbinom(W,size = W + L, prob = p_grid)
+
+posterior = likelihood * prior
+
+posterior = posterior / sum(posterior)
+
+# now sample from poseterior to create samples 
+set.seed(100)
+samples = sample(p_grid, prob = posterior, size = 1e4, replace = TRUE)
+
+hist(samples)
+
+```
+
+
+
+###==============================
+Lecture 2 
+
+globe tossing 
+
+N - number of tosses, observed
+p - true proportion, unobserved
+W - number of water observerd from N, observed 
+
+generatively, N and p cause W 
+N --> W < -- p 
+
+something has been caused, then trace arrows backwards to make inferences about the cause 
+
+W; relative number of ways to see W, wiven N and p 
+a function --> a probability distribution --> binomial 
+
+dbinom- binomial density 
+
+prior predictive distribution; --> Prior
+
+grid approximation --> 1 pass through p_grid! 
+1) define p_grid --> all values of the parameter matrix considered 
+2) define prior --> uniform, etc; assigned to each value of p_grid
+3) likelihood --> given distribution understood from generative process, likelihood of data given value of p_grid 
+4) posterior --> likelihood * prior / sum(likelihood * prior) 
+
+
+sampling from the posterior 
+- visualize uncertainty 
+- compute  confidence intervals 
+- simulate observations 
+
+recipe for sampling 
+1) compute or approximate posterior 
+2) sample with replacement from posterior 
+3) compute stuff from samples 
+
+samples = sample(p , prob=posterior, size=1e4, replcae=TRUE)
+
+HPDI; highest posterior density interval (HPDI)
+
+talking about intervals 
+a better term --> COMPATIBLE INTERVAL 
+
+the interval is compatible with the assumptions 
+
+
+POSTERIOR PREDICTIVE DISTRIBUTIONS 
+resulting distribution of randomly sampled parameters weighted 
+by plausibiilty of sampled parameters 
+
+
+
+
+
+
+
+
+
+

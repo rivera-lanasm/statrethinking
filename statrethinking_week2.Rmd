@@ -1,0 +1,944 @@
+---
+title: "Statistical Rethinking Week 2"
+output: html_notebook
+---
+
+# ====================
+# ==================== 
+# CHAPTER 4 ; GEOCENTRIC MODELS 
+
+the geocentric model continues to make usefule predictions, provided those predictions remain within a narrow domain of questioning 
+
+Ptolemaic strategy same as a Fourier series
+a way of decomposing a periodic function into a series of sine and cosine functions 
+
+Linear regression is the geocentric model of applied statistics 
+
+Linear Regression as a Bayesian procedure 
+
+### ==============================================
+Why normal distributions are normal 
+
+recall CLT
+
+```{r}
+# soccer field experiment --> binomial distribution 
+
+# coin flips, then a random step size is taken in the propoer direction 
+
+# generate for each perion, a sample of 16 random numbers from -1 to 1 
+# add these together to get position after 16 steps 
+# repeat 1000 times 
+
+pos = replicate(1000, sum(runif(16,-1,1)))
+
+plot(density(pos))
+
+
+```
+
+recall, any process that adds together random values from the same distribution converges a normal 
+
+why addition should result in a bell curve of sums 
+
+when we sample from a distribution is just the average and a fluctuation, the fluctuation has a normal distribution 
+
+# ==================================
+NORMAL BY MULTIPLICATION
+
+
+```{r}
+# estimating a growth rate 
+
+est_growth = prod(1 + runif(12, 0, 0.1))
+
+growth_sample = replicate(1000,prod(1+ runif(12,0,0.1)))
+
+rethinking::dens(growth_sample, norm.comp= TRUE)
+
+big = replicate(1000, prod(1 + runif(12,0,0.5)))
+rethinking::dens(big, norm.comp= TRUE)
+
+# LARGER RANGES OF PERCENTAGE CHANGES RESULT IN LARGER ERROR 
+# UNLESS LOG SCALING APPLIED 
+# SMALL EFFECTS THAT MULTIPLY TOGETHER ARE APPROXIMATED ADDITIVE 
+
+
+
+```
+
+
+# ==========================================
+NORMAL BY LOG MULTIPLICATION 
+
+LARGE DEVIATES THAT ARE MULTIPLIED DO NOT PRODUCE GAUSSIAN DISTRIBUTIONS WHEN APPROXIMATED ADDITIVELY 
+BUT THEY DO PRODUCE GAUSSIAN DISTRIBUTIONS ON LOG SCALE 
+
+```{r}
+log.big = replicate(5000, log(prod(1+runif(12,0,0.5))))
+rethinking::dens(log.big, norm.comp= TRUE)
+
+# recall this is because adding logs is equivalent to mulplying 
+# original numbers 
+
+```
+
+
+## ====================================
+USING GAUSSIAN DISTRIBUTIONS 
+
+Gaussian as skeleton for hypotheses 
+building up modls of measurements as aggregations of normal distributions 
+
+JUSTIFICATIONS 
+
+1) ONTOLOGICAL 
+the world is full of gaussian distributions approximately
+these processes do thus because at their core, all ADD TOGETHER FLUCTIOATIONS 
+
+REPEATEDLY ADDING FINITE FLUCTUATIONS RESUTS IN A DISTRIBUTION OF SUMS THAT HAVE SHED ALL INFORMATION ABOUT THE UNDERLYING PROCESS 
+besides mean and spread 
+
+result
+statistical models based on gaussian distributions cannot reliably identify micro process 
+
+you build a statistical model before you understand tehe underlying process
+
+the exponential family of distributions
+
+2) EPISTEMOLOGICAL 
+
+gaussian process REPRESENTS A PARTICULAR STATE OF IGNORANCE 
+
+when all we know or are willing to say about a distribution of measures is its MEAN and VARIANCE, the gaussian is very consistent with these assumptions 
+
+Premised on INFORMATION THEORY and MAXIMUM ENTROPY 
+
+formula 
+
+(y-mu)^2 term
+gives normal dis its funcamental shape, a quadratic shape 
+exponenting quadratic gives a bell curve 
+
+other terms are just scales and standardizations so it sums to 1 
+
+```{r}
+# gaussian prototype 
+curve(exp(-x^2) , from = -3, to = 3)
+```
+
+
+PROBABILITY DENSITIES CAN BE GREATER THAN 1 
+but integral will sum to 1 
+prob density is the RATE OF CHANGE in cumulative probability 
+
+# =====================================
+A LANGUATE FOR DESCRIBING MODELS 
+
+1) recognize set of variables we wish to understand 
+observed variables, data 
+unobserved variables, parameters 
+
+2) each variable defined in terms of other variables, or in terms of a probability distribution 
+
+3) combination of variables and their probability distributions defined a JOINT GENERATIVE MODEL 
+can be used to
+a) simulate hypothetical observations 
+2) analyze real observations 
+
+Redescribe globe tossing model 
+
+THe count W is binomial distributed with sample size N and prob p. 
+the prior for p is assumed to be uniform 0,1
+
+W ~ Binomial(N, p) --> likelihood function used in Bayes
+
+p ~ Uniform(0,1) --> priors
+
+~ symbol actually indicates STOCHASTIC process 
+a probabalistic mapping
+
+GRID APPROXIMATION REVISITED 
+```{r}
+W = 6 
+N = 9
+
+p_grid = seq(from = 0, to = 1, length.out = 100)
+
+likelihood = dbinom(W,N,prob = p_grid)
+prior = dunif(p_grid, 0, 1)
+
+posterior = likelihood * prior
+posterior = posterior / sum(posterior)
+
+# plot posterior 
+plot(p_grid, posterior, type="b", 
+     xlab="parameter", 
+     ylab="plausibility of parameter")
+mtext("n points")
+
+```
+
+
+
+# ===================================
+BUILDING TO LINEAR REGRESSION
+
+when estimating a gaussian parameter, the result is a posterior distribution
+this is a distribution of Gaussian distributions 
+
+```{r}
+# HOwell data 
+# partial census data 
+
+library(rethinking)
+
+data(Howell1)
+data = Howell1
+
+str(data)
+
+rethinking::precis(data)
+```
+
+```{r}
+data_adult = data[data$age >= 18, ]
+
+dens(data_adult$height)
+
+# recall distribution of sums tends to converge to 
+# a gaussian distribution
+
+# h ~ Normal(mu, sigma)
+
+
+```
+
+mind projection fallacy
+mistaking epistemological claims with ontological ones 
+the assumptions are inside the golum, not in the real world 
+
+de FInetti's theorem
+values which are EXCHANGEABLE can be approximated by mixtures of 
+iid distributions 
+exchangeable items can be reordered 
+
+setting priors 
+parameters to be estimated are mu and sigma 
+so prior --> Pr(mu, sigma) ; joint prior probability 
+
+in most cases priors are specified independently for each parameter
+so Pr(mu, sigma) = Pr(mu) * Pr(sigma)
+
+h ~ N(MU, SIGMA)
+MU ~ N(178,20)
+SIGMA ~ Uniform(0,50)
+
+```{r}
+# prior distribution for parameter, MU
+curve(dnorm(x, 178, 20), from = 100, to = 250)
+
+# flat prior for variance of gaussian height distribution
+curve(dunif(x,0,50), from = -10 , to = 60)
+```
+
+PRIOR PREDICTIVE SIMULATION
+what do these prior imply about te distribution of individual heights 
+
+simulate from this prior distribution 
+```{r}
+sample_mu = rnorm(1e4, 178, 20)
+sample_sigma = runif(1e4, 0, 50)
+
+# sampling heights from 10000 different distributions 
+prior_h = rnorm(1e4, sample_mu, sample_sigma)
+
+dens(prior_h)
+
+# test different priors to arrive at a sensible distribution sample
+
+# in both prior and postrior predictive simulation, one calls on the 
+# likelihood probability function to sample realizations of     
+# hypothetical data, 
+
+# where the number of new observations is equal to the number of times # samples were drawn from the probability distributions of either the # or the posterior distributions of the parameters that define the 
+# generative process of the data  
+
+# each draw of parameters of the data generative probability 
+# distribution, which are drawn from either the prior or the 
+# posterior, correspond to one new data realization 
+
+```
+
+farewell to epsilon =( 
+epsiolon notation for defining random variables is poor form because it dos not usually genearlize to other non gaussian models 
+
+### ======================================
+Grid approximation of the posterior distribution 
+
+```{r}
+# grid approximation 
+
+# grid for mu; drawn from prior above 
+
+mu.list = seq(from = 140, to = 160, length.out = 200)
+sigma.list = seq(from = 4, to = 9, length.out = 200)
+post = expand.grid(mu = mu.list, sigma = sigma.list)
+
+post$LL = sapply(
+                 # post has 200**2 = 40,000 rows
+                 1:nrow(post),
+                 # log likelihood fuction
+                 # sum of log likelihoods of data
+                 # in GA, you pass through each combination
+                 # of parameter values, then pass through ALL of the data, and find the posterior probability. so there is a final posterior probability associated with each combination of p_grid parameter values
+                 function(i) sum(dnorm(
+                   data_adult$height,
+                   mean = post$mu[i],
+                   sd = post$sigma[i],
+                   log = TRUE )) )
+
+# applying the prior tp likelihood of data given ALL OBSERVED DATA 
+# one value of log probability for p_grid parameter combinations 
+post$prod = post$LL + dnorm(post$mu, mean = 178, sd = 20, log = TRUE) + dunif(post$sigma, min = 0, max = 50, log = TRUE)
+
+
+
+# exponentiating log likelihood 
+
+# scaling all log products by max log product 
+# values in prob column are not exactly probabilities 
+# they are relative posterior probablilities --> good enough 
+post$prob <- exp( post$prod - max(post$prod) )
+
+```
+
+
+```{r}
+rethinking::contour_xyz(post$mu, post$sigma, post$prob)
+
+rethinking::image_xyz(post$mu, post$sigma, post$prob)
+```
+
+###======================
+Sampling from the posterior 
+
+learning from this posterior distribution in more detail by sampling values of new hypothetical data from it 
+
+randomly sample row numbers (40,000 total)
+in proportion to values in post$prob --> the posterior 
+then draw a new value using the parameters specified in row 
+
+```{r}
+# samples from poseterior for adult height data 
+
+# sample from row indexes, weighted by post$prob
+sample.rows = sample(1:nrow(post), size = 1e4, replace = TRUE, 
+                     prob = post$prob)
+
+sample.mu = post$mu[sample.rows]
+sample.sigma = post$sigma[sample.rows]
+
+# 10,000 samples, with replacement, from the posterior 
+# samples of parameter combinations 
+
+plot(sample.mu, sample.sigma, cex = 0.6, pch=15, col=rethinking::col.alpha(rethinking::rangi2,0.1))
+
+
+```
+
+with samples of parameter combinations, you can describe the distribution of confiecnce in each combination of mu and sigma 
+
+```{r}
+# marginal posterior densities 
+
+rethinking::dens(sample.mu)
+rethinking::dens(sample.sigma)
+```
+
+
+```{r}
+
+# HPDI --> narrowest range of probability masses containing the specified density --> Default: 89% 
+rethinking::HPDI(sample.mu)
+
+rethinking::HPDI(sample.sigma)
+```
+
+####===============================================
+####===============================================
+####===============================================
+
+sample size and the normality of sigma's posterior 
+before moving on to using quadratic approximation (quap)
+
+in principle, the posetrior is not always so Gaussian in shape 
+
+for the mean, which has a gaussian prior, there is no issue regardless of sample size 
+
+distributions of sigma in posterior tend to have long right tail 
+
+```{r}
+d3 <- sample( data_adult$height , size=20 )
+
+mu.list = seq( from=150, to=170 , length.out=200 )
+sigma.list <- seq( from=4 , to=20 , length.out=200 )
+post2 <- expand.grid( mu=mu.list , sigma=sigma.list )
+post2$LL <- sapply( 1:nrow(post2) , function(i)
+    sum( dnorm( d3 , mean=post2$mu[i] , sd=post2$sigma[i] ,
+    log=TRUE ) ) )
+post2$prod <- post2$LL + dnorm( post2$mu , 178 , 20 , TRUE ) +
+    dunif( post2$sigma , 0 , 50 , TRUE )
+post2$prob <- exp( post2$prod - max(post2$prod) )
+sample2.rows <- sample( 1:nrow(post2) , size=1e4 , replace=TRUE ,
+    prob=post2$prob )
+sample2.mu <- post2$mu[ sample2.rows ]
+sample2.sigma <- post2$sigma[ sample2.rows ]
+plot( sample2.mu , sample2.sigma , cex=0.5 ,
+    col=rethinking::col.alpha(rethinking::rangi2,0.1) ,
+    xlab="mu" , ylab="sigma" , pch=16 )
+
+
+rethinking::dens( sample2.sigma , norm.comp=TRUE )
+```
+
+### ===========================================
+### ===========================================
+### ===========================================
+QUADRATIC APPROXIMATION WITH quap()
+
+way to quickly make inferences about the shape of the posterior 
+the peak will lie at the MAXIMUM A POSTERIORI (MAP)
+
+GET A USEFUL IMAGE OF THE POSTERIOR'S SHAPE BY USING THE QUADRATIC APPROXIMATION OF THE POSTERIOR AT THE PEAK 
+
+```{r}
+data_adult
+```
+
+
+
+```{r}
+# define generative function for height
+# parameters of this distribution 
+
+flist = alist(
+              height ~ dnorm(mu, sigma), 
+              mu ~ dnorm(178, 20), 
+              sigma ~ dunif(0,50))
+
+```
+
+
+```{r}
+# fit the model 
+
+m4.1 = rethinking::map(flist, data = data_adult)
+
+```
+
+```{r}
+# investigate posterior distribution 
+
+rethinking::precis(m4.1)
+```
+
+
+these provide the Gaussian approximations for each parameter's MARGINAL DISTRIBUTION 
+--> plausibility of each value mu AFTER averaging over the plausibilities of each value of sigma 
+
+when the posterior is approximately gaussian, you can expect this estimate of the posterior to be almost identical to the grid approximation from before 
+
+### ====================================
+map() start values for optimization 
+defaults to random values sampled from prior 
+you can also specify starting values 
+
+```{r}
+start <- list(
+    mu=mean(data_adult$height),
+    sigma=sd(data_adult$height)
+)
+
+m4.1 = rethinking::map(flist, data = data_adult, start = start)
+
+rethinking::precis(m4.1)
+```
+
+
+adjusting prior for one parameter can change posterior estimates of another
+for example, if you define the prior standard deviation for the distribution of mu to be very very small 
+
+this will inflate the estimate for the mean estimate for the posterior distriubtion of the height genreative distribution's estimate of sigma 
+##==================================
+Sampling from posterior distribution arrived at by using 
+quadratic approximation 
+
+when there is more than one parameter to estimate, the quap calculates the standard deviations and COVARIANCES among all the pairs of parameters 
+
+thus, quap produces a list of MEANS and a COVARIANCE MATRIX 
+
+for example, 
+
+```{r}
+
+# covariance matrix 
+rethinking::vcov( m4.1 )
+
+# variance 
+diag(rethinking::vcov( m4.1 ))
+
+# correlation matrix
+cov2cor(rethinking::vcov( m4.1 ))
+```
+
+sampling from the posterior yielded by quap 
+each sample is a pair of mu and sigma 
+
+```{r}
+# uses multivariate version of rnorm 
+# multivariate gaussian distribution 
+# mvnorm from MASS library 
+
+post = rethinking::extract.samples(m4.1, n = 1e4)
+post
+
+rethinking::precis(post)
+
+plot(post)
+```
+
+after adding a predictor variable to the model, the covariance between parameters matters much more 
+
+
+# =======================================
+# ========================================
+# =======================================
+ADDING A PREDICTOR 
+
+new question --> how HEIGHT covaries with WEIGHT 
+
+```{r}
+plot(data_adult$height ~ data_adult$weight)
+```
+
+linear model strategy 
+make the parameter for the mean of a gaussian distribution, mu into a LINEAR FUNCTION of the predictor variable and NEW PARAMETERS 
+
+golem computes the posterior distribution of this constant relationship 
+
+the posterior distribution provides relative plausibilities of different possible strengths of association, given assumptions
+
+example, one predictor variable 
+
+RECALL, 
+
+x --> weight measurements, E(x) is mean 
+
+1)
+likelihood --> h(i) ~ Normal(mu(i), sigma)
+
+2)
+linear model (mu) --> mu(i) = alpha + beta * (xi - E(x))
+
+3)
+prior (alpha) -> alpha ~ Normal(178, 20)
+prior (beta) --> beta ~ Normal(0,10)
+prior (sigma) --> sigma ~ Uniform(0,50)
+
+1) prob of data, likelihood 
+mu(i), the mean mean, mu, now depends upon unique value on each row
+
+2) linear model 
+mu(i) is not longer a parameter to be estimated 
+now onstructed from other parameters, alpha and beta and observation x
+not a stochastic relationship, no ~ 
+rather an =, because mu(i) is deterministic 
+once we know alpha and beta, we KNOW mu(i) WITH CERTAINTY 
+
+each parameter, alpha and beta, is a target of learning 
+to be described in the posterior distribution 
+
+recall,
+mu(i) = alpha + beta(x(i) - E(x))
+
+a) what is the expected value, mu(i), when x is equal to E(x)
+alpha --> intercept 
+b) change in expected height when x(i) changes by 1 unit 
+beta --> rate of change in expectation 
+
+3) priors 
+
+priors for alpha, beta, and sigma 
+in the one variable model, mu was comprised on what is now alpha 
+
+prior for beta 
+beta ~ Normal(0,10)
+
+understand implications by simulate the PRIOR PREDICTIVE SIMULATION
+GOAL --> SIMULATE OBSERVED HEIGHTS FROM MODEL 
+simulate a series of lines implied by priors for alpha and beta 
+
+```{r}
+set.seed(2971)
+N = 100 # 100 lines 
+
+a = rnorm(N, 178, 20) # alpha 
+b = rnorm(N, 0, 10)
+```
+
+```{r}
+plot(NULL, xlim = range(data_adult$weight), ylim = c(-100,400), 
+     xlab = "weight", ylab = "height")
+
+abline(h = 0, lty = 2)
+abline(h=272, lty=1, lwd=0.5)
+
+mtext("b ~ dnorm(0,10)")
+
+xbar = mean(data_adult$weight)
+
+for (i in 1:N) curve(a[i] + b[i]*(x - xbar), 
+    from = min(data_adult$weight), to = max(data_adult$weight), 
+    add = TRUE, 
+    col = rethinking::col.alpha("black", 0.2))
+
+```
+
+NOT A VERY SENSIBLE PRIOR IT SEEMS!!
+FOR BETA, giving equal likelihood of positive and negative exp value
+
+making a better prior 
+
+DEFINE PRIOR for BETA --> AS LOG-NORMAL 
+--> logarithm of BETA has a standard normal distribution 
+
+Beta ~ Log-Normal(0,1)
+```{r}
+b = rlnorm(1e4, 0, 1)
+
+rethinking::dens(b, xlim=c(0,5), adj=0.1)
+
+rethinking::dens(log(b), xlim=c(-3,3), adj=0.1)
+```
+
+log normal priors are an easy way to enforce positive relationships 
+
+TRY AGAIN
+
+```{r}
+set.seed(2971)
+N = 100
+a = rnorm(N, 178, 20)
+b = rlnorm(N, 0, 1)
+
+```
+
+each of these lines is just a SAMPLE FROM THE PRIOR DISTRIBUTION 
+```{r}
+plot(NULL, xlim = range(data_adult$weight), ylim = c(-50,300), 
+     xlab = "weight", ylab = "height")
+
+abline(h = 0, lty = 2)
+abline(h=272, lty=1, lwd=0.5)
+
+mtext("b ~ dnorm(0,10)")
+
+xbar = mean(data_adult$weight)
+
+for (i in 1:N) curve(a[i] + b[i]*(x - xbar), 
+    from = min(data_adult$weight), to = max(data_adult$weight), 
+    add = TRUE, 
+    col = rethinking::col.alpha("black", 0.2))
+```
+
+Many times, priors end up being irrelevant given the amount of data 
+but this is not always true 
+
+second, thinking about priors helps us devleop better models 
+
+recall, 
+choose priors conditional on pre-data knowledge! 
+
+##===============================================
+##===============================================
+FInding the posterior distribution 
+
+```{r}
+
+library(rethinking)
+data(Howell1)
+
+data = Howell1
+data_adult = data[data$age >= 18,]
+
+# define the average weight, xbar 
+xbar = mean(data_adult$weight)
+
+# fit model using quadratic approximation 
+m4.3 = rethinking::map(
+    alist(
+        height ~ dnorm(mu, sigma),
+        mu <- a + b*(weight - xbar), 
+        a ~ dnorm(178, 20), 
+        b ~ dlnorm(0,1),
+        sigma ~ dunif(0,50)
+    ), 
+    data = data_adult
+)
+
+```
+
+everything that depends upon parameters has a posterior distribution
+
+can work directly with the posterior of mu even THOUGH IT IS NOT A PARAMETER, but composed of two parameters, alpha and beta 
+
+Interpreting the posterior distribution 
+
+1) reading tables 
+2) plotting sumulations 
+
+emphasize plotting posterior distributions and posterior predictions 
+
+WHAT PARAMETERS MEAN 
+posterior probabilities of parameter values describe the RELATIVE COMPATABILITY OF DIFFERENT STATES OF THE WORLD WITH THE DATA, ACCORDING TO THE MODEL 
+--> small world numbers
+
+# =======================================
+Tables of marginal distributions 
+MArginal posterior distributions 
+
+```{r}
+rethinking::precis(m4.3)
+```
+the quadratic approximation of the parameters: 
+1) alpha 2) beta 3) sigma
+
+
+COVARIANCE AMONG THE PARAMETERS 
+```{r}
+round(vcov(m4.3), 3)
+```
+
+very little covriance among the parameters 
+result of --> CENTERING 
+
+# ========================================
+PLOTTING POSTERIOR INFERENCE AGAINST THE DATA 
+
+an informal check on model assumptions 
+and help interpret posterior
+
+
+superimpose theposterio mean values over the height and weight data 
+```{r}
+plot(height~weight, data = data_adult, col=rangi2)
+
+# recall, extract.samples is working on a MULTI VAR GAUSSIAN
+# a MULTI DIMENSIONAL POSTERIOR 
+post = extract.samples(m4.3)
+
+a_map = mean(post$a)
+b_map = mean(post$b)
+
+curve(a_map + b_map*(x - xbar), add=TRUE)
+
+
+```
+
+# =======================================
+ADDING UNCERTAINTY AROUND MEAN 
+
+each combination of alpha and beta has a posterior probability 
+
+each sample from extract.samples is a correlated random sample from the joint posterior of all three parameters 
+
+```{r}
+# limiting data to first 10 rows !!
+
+N = nrow(data_adult) # 35
+dN = data_adult[1:N,]
+
+mN = rethinking::map(
+    alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b*(weight - mean(weight)),
+    
+    a ~ dnorm(178,20),
+    b ~ dlnorm(0,1),
+    sigma ~ dunif(0,50) )
+, data = dN)
+
+
+# extract 20 sample lines from the posterior
+post = extract.samples(mN, n=20)
+
+# display raw data and sample size 
+
+plot(dN$weight, dN$height, 
+     xlim = range(data_adult$weight), ylim = range(data_adult$height), 
+     col = rangi2, xlab = "weight", ylab = "height")
+mtext(concat("N = ", N))
+
+# PLOT THE LINES
+for (i in 1:20)
+    curve(post$a[i] + post$b[i]*(x-mean(dN$weight)), add=TRUE)
+```
+
+THE MORE LINES ADDED, THE SMALLER THE SPREAD 
+plotting different values of N gives a sense of the convergence of the learning via quadratic appriximation
+
+# =======================================
+Plotting regression intervals and contours 
+
+focus on a single weight value --> 50 Kg
+```{r}
+sample_weight = 50 
+xbar = mean(data_adult$weight)
+
+post = extract.samples(m4.3)
+mu_at_50 = post$a + post$b*(sample_weight - xbar)
+
+# this is a vector of predicted means
+# one for each random sample from the posterior 
+
+rethinking::dens(mu_at_50, col=rangi2, lwd=2, 
+                 xlab = "mu | weight = 50")
+```
+
+since the components of mu(i) have distributions, so too does mu(i)
+and since they are both gaussian, the distribution of mu is also Gaussian 
+
+```{r}
+rethinking::HPDI(mu_at_50, prob=0.89)
+```
+recall, this means that the central 89% of the ways for the model to produce the data place the average height between about 159 cm and 160 cm, assuming weight is 50 kg 
+
+
+Now expand this to ALL WEIGHT VALUES 
+using the LINK Function 
+sample from posterior, then compute estimate for mu for each case in the data and sample 
+
+1000 samples from posterior for EACH VALUE of weight found in data 
+```{r}
+# define sequence of weight observations to compute predictions for
+weight.seq = seq(from=25, to=70, by = 1)
+
+# use link to compute posterior sample distributions of mu
+
+# samples from posterior N times, only ONCE 
+# applies the result of the sampling across the values of weight.seq
+mu <- rethinking::link( m4.3 , data=data.frame(weight=weight.seq) )
+plot(height~weight, data_adult, type="n")
+
+# loop over samples and plot each mu distribution 
+for ( i in 1:100 )
+    points( weight.seq , mu[i,] , pch=16 , 
+            col=rethinking::col.alpha(rethinking::rangi2,0.1) )
+```
+Each cluster is a GAUSSIAN distribution 
+the amount of uncertainty around mu depends on the value of weight 
+
+
+summarize the distribution of mu 
+```{r}
+mu.mean = apply(mu, 2, mean)
+mu.HPDI = apply(mu, 2, rethinking::HPDI, prob=0.89)
+```
+
+mu.mean contains the average mu conditional on a particular value of the WEIGHT variable
+similar for mu.HDPI 
+
+there is a unique distribution of mu conditional on particular values of weight 
+these can be analyzed by sampling from the posterior distribution 
+
+plot these
+```{r}
+plot(height~weight, data = data_adult,
+     col = rethinking::col.alpha(rethinking::rangi2, 0.5))
+
+# plot the MAP Line (maximum a posteriori)
+#           the mean mu for each weight 
+# with shaded region for 89% HPDI
+
+rethinking::shade(mu.HPDI, weight.seq)
+
+# analytic methods for this also exist 
+```
+
+for generating predictions and intervals from the posterior of a fit model :
+1) genearte posterior values for mu conditional on hypothetical values of predictor variable 
+
+2) find marginal distributions and summaries, like mean or HPDI, conditional on predictor values 
+
+3) produce plots of these distributions 
+
+# ========================================
+PREDICTION INTERVALS 
+
+generating an 89% prediction interval for actual heights 
+
+recall, 
+
+h ~ Normal(mu, sigma)
+
+so far, we have only visualized uncertainty in mu 
+but the ACTUAL heights depend on the distribution described here 
+need to incorporate sigma into predictions 
+
+sim method 
+```{r}
+sim.height = rethinking::sim(m4.3, data = list(weight = weight.seq))
+str(sim.height)
+
+```
+
+this contains simulated heights, not distribution of plausible average height, mu 
+
+PREDICTION INTERVAL 
+```{r}
+height.PI = apply(sim.height, 2, rethinking::PI, prob=0.89)
+# prediction interval 
+```
+
+THREE LEVELS 
+
+1) THE AVERAGE LINE, MAP
+2) 89% REGION OF PLAUSIBLE MAP 
+3) Boundaries of SIMULATED HEIGHTS THE MODEL EXPECTS 
+    incorporates sigma 
+    
+```{r}
+
+# RAW DATA
+plot(height~weight, data_adult, 
+     col=rethinking::col.alpha(rethinking::rangi2,0.5))
+
+# draw MAP LINE
+lines(weight.seq, mu.mean)
+
+# draw HPDI region for line 
+rethinking::shade(mu.HPDI, weight.seq)
+
+
+# draw PREDICTION INTERVAL for simulated HEIGHTS 
+rethinking::shade(height.PI, weight.seq)
+```
+
+recall, 
+
+1) uncertainty in the parameter values  
+2) uncertainty in sampling process 
+
+# ========================================
+# =======================================
+LECTURE
+
+
+
+
+
+
+
+
+
